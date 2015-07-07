@@ -1,0 +1,10 @@
+[package]
+name = "libnoise"
+version = "0.1.0"
+authors = ["Tiffany Bennett <tiffany@stormbit.net>"]
+[dependencies]
+byteorder = "*"
+[dependencies.libsodium-sys]
+git = "https://github.com/tiffany352/sodiumoxide.git"
+[dependencies.sodiumoxide]
+git = "https://github.com/tiffany352/sodiumoxide.git"

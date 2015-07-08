@@ -1,5 +1,5 @@
 [package]
-name = "libnoise"
+name = "susurrus"
 version = "0.1.0"
 authors = ["Tiffany Bennett <tiffany@stormbit.net>"]
 [dependencies]

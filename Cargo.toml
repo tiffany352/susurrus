@@ -2,9 +2,10 @@
 name = "susurrus"
 version = "0.1.0"
 authors = ["Tiffany Bennett <tiffany@stormbit.net>"]
+description = "Noise implementation in Rust"
+repository = "https://github.com/tiffany352/susurrus"
+keywords = ["noise", "protocol", "crypto"]
+license = "MIT"
 [dependencies]
 byteorder = "*"
-[dependencies.libsodium-sys]
-git = "https://github.com/tiffany352/sodiumoxide.git"
-[dependencies.sodiumoxide]
-git = "https://github.com/tiffany352/sodiumoxide.git"
+sodiumoxide = { git = "https://github.com/dnaq/sodiumoxide.git" }

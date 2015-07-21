@@ -9,3 +9,5 @@ license = "MIT"
 [dependencies]
 byteorder = "*"
 sodiumoxide = { git = "https://github.com/dnaq/sodiumoxide.git" }
+getopts = "*"
+rustc-serialize = "*"

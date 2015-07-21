@@ -187,7 +187,7 @@ fn main() {
             None => return println!("Must specify local key when decrypting")
         };
         let msg = if &buf[..17] == &b"noise255-message:"[..] {
-            String::from_utf8_lossy(&buf[..]).from_hex().unwrap()
+            String::from_utf8_lossy(&buf[17..]).from_hex().unwrap()
         } else {
             buf
         };

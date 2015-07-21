@@ -82,13 +82,13 @@ pub struct KeyPair {
 }
 
 pub struct Session {
-    s: Option<KeyPair>,
+    pub s: Option<KeyPair>,
     e: Option<KeyPair>,
-    rs: Option<PubKey>,
+    pub rs: Option<PubKey>,
     re: Option<PubKey>,
-    k: Option<chacha20::Key>,
-    n: u64,
-    h: sha512::Digest
+    pub k: Option<chacha20::Key>,
+    pub n: u64,
+    pub h: sha512::Digest
 }
 
 pub enum Descriptor {
@@ -186,10 +186,14 @@ impl Session {
                 Descriptor::DHES => dh_branch!(e, rs)
             }
         }
-        let k = self.k.clone().unwrap();
         let n = self.get_nonce();
         let a = concat_vec!(buf, self.h.0);
-        buf.extend(NoiseBody::encrypt(&k, &n, &a[..], payload).write().iter().cloned());
+        match self.k {
+            Some(ref k) => {
+                buf.extend(NoiseBody::encrypt(&k, &n, &a[..], payload).write().iter().cloned());
+            }
+            None => buf.extend(payload.iter().cloned())
+        }
         if descriptors.len() > 0 {
             self.h = sha512::hash(&concat_vec!(self.h.0, buf)[..]);
         }
@@ -233,10 +237,13 @@ impl Session {
             }
         }
 
-        let k = self.k.clone().unwrap();
         let n = self.get_nonce();
         let a = concat_vec!(data[..off], self.h.0);
-        let payload = try!(NoiseBody::read(&data[off..]).decrypt(&k, &n, &a[..]));
+        let payload = match self.k {
+            Some(ref k) =>
+                try!(NoiseBody::read(&data[off..]).decrypt(&k, &n, &a[..])),
+            None => data[off..].to_vec()
+        };
         if descriptors.len() > 0 {
             self.h = sha512::hash(&concat_vec!(self.h.0, data)[..]);
         }

@@ -78,8 +78,8 @@ impl BoxX {
         s.create(&[], &[Descriptor::Ephemeral, Descriptor::DHES, Descriptor::Static, Descriptor::DHSS], pt)
     }
 
-    pub fn unbox(sender: PubKey, receiver: KeyPair, ct: &[u8]) -> Result<Vec<u8>, ()> {
-        let mut s = Session::new(Some(receiver), Some(sender));
+    pub fn unbox(receiver: KeyPair, ct: &[u8]) -> Result<Vec<u8>, ()> {
+        let mut s = Session::new(Some(receiver), None);
         s.consume(ct, &[Descriptor::Ephemeral, Descriptor::DHES, Descriptor::Static, Descriptor::DHSS]).map(|(_,p)| p)
     }
 }
@@ -92,5 +92,5 @@ fn test_boxx() {
     println!("ciphertext: ");
     let ct = BoxX::enbox(skp.clone(), rkp.pubkey.clone(), msg);
     pretty_print_hex(&ct[..]);
-    assert!(&msg[..] == &BoxX::unbox(skp.pubkey.clone(), rkp.clone(), &ct[..]).ok().unwrap()[..]);
+    assert!(&msg[..] == &BoxX::unbox(rkp.clone(), &ct[..]).ok().unwrap()[..]);
 }

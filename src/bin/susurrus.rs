@@ -194,7 +194,8 @@ fn main() {
         match remote {
             Some(x) => noisebox::BoxK::unbox(x, local.clone(), &msg[..]),
             None => Err(())
-        }.or(noisebox::BoxN::unbox(local, &msg[..]))
+        }.or(noisebox::BoxN::unbox(local.clone(), &msg[..]))
+            .or(noisebox::BoxX::unbox(local, &msg[..]))
     };
 
     match result {

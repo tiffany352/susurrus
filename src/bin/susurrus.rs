@@ -23,7 +23,12 @@ macro_rules! make_fixed {
 }
 
 fn print_usage(program: &str, opts: Options) {
-    let brief = format!("Usage: {} [options]", program);
+    let mut brief = format!("Usage: {} <command> [options]", program);
+    brief.push_str("\n\nCommands:\n");
+    brief.push_str("    box     seals data in an encrypted box\n");
+    brief.push_str("    unbox   unseals a box\n");
+    brief.push_str("    keygen  generate a new keypair\n");
+    brief.push_str("    pubkey  exract public key from keypair");
     print!("{}", opts.usage(&brief));
 }
 
@@ -75,38 +80,22 @@ fn main() {
     let program = args[0].clone();
 
     let mut opts = Options::new();
-    opts.optflag("e", "encrypt", "sets the mode to encryption");
-    opts.optflag("d", "decrypt", "sets the mode to decryption");
-    opts.optflag("k", "keygen", "generate a new key pair");
-    opts.optflag("p", "pubkey", "extracts public key from key pair");
     opts.optflag("a", "ascii", "ASCII armor encrypted result");
     opts.optopt("i", "input", "sets input file, defaults to stdin", "NAME");
     opts.optopt("o", "output", "set output file, defaults to stdout", "NAME");
     opts.optopt("r", "remote", "specifies file containing remote's public key", "NAME");
     opts.optopt("l", "local", "specifies file containing local key pair", "NAME");
     opts.optopt("t", "type", "specifies the box type to use (one of n, k, or x)", "TYPE");
-    opts.optflag("h", "help", "print this help menu");
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => { m }
-        Err(f) => { panic!(f.to_string()) }
-    };
-    if matches.opt_present("h") {
+    if args.len() < 2 {
         print_usage(&program, opts);
         return;
     }
-
-    let encrypting = match (matches.opt_present("e"), matches.opt_present("d")) {
-        (true, true) => {
-            println!("Cannot encrypt and decrypt simultaneously");
-            return print_usage(&program, opts);
-        },
-        (true, false) => true,
-        (false, true) => false,
-        (false, false) => if !matches.opt_present("k") && !matches.opt_present("p") {
-            println!("Must specify encryption or decryption");
-            return print_usage(&program, opts);
-        } else { false }
+    let command = args[1].clone();
+    let matches = match opts.parse(&args[2..]) {
+        Ok(m) => { m }
+        Err(f) => { panic!(f.to_string()) }
     };
+
     let mut output = match matches.opt_str("o") {
         Some(f) => match OpenOptions::new().write(true).create(true).open(&f) {
             Ok(x) => Box::new(x) as Box<io::Write>,
@@ -142,68 +131,84 @@ fn main() {
         None => None
     };
 
-    if matches.opt_present("k") {
-        let kp = session::gen_keypair();
-        output.write(&b"noise255-secret:"[..]).unwrap();
-        output.write(&kp.pubkey.0[..].to_hex().as_bytes()).unwrap();
-        output.write(&kp.privkey.0[..].to_hex().as_bytes()).unwrap();
-        output.flush().unwrap();
-        return
-    }
-
-    if matches.opt_present("p") {
-        let local = match local {
-            Some(x) => x,
-            None => return println!("Key pair must be specified to extract public key")
-        };
-        output.write(&b"noise255-public:"[..]).unwrap();
-        output.write(&local.pubkey.0[..].to_hex().as_bytes()).unwrap();
-        output.flush().unwrap();
-        return
-    }
-
-    let mut buf = vec![];
-    input.read_to_end(&mut buf).unwrap();
-    let result = if encrypting {
-        let remote = match remote {
-            Some(x) => x,
-            None => return println!("Must specify remote key when encrypting")
-        };
-        let res = match local {
-            Some(x) => noisebox::BoxX::enbox(x, remote, &buf[..]),
-            None => noisebox::BoxN::enbox(remote, &buf[..])
-        };
-        if matches.opt_present("a") {
-            let mut out = String::new();
-            out.push_str("noise255-message:");
-            out.push_str(&res.to_hex()[..]);
-            Ok(out.into_bytes())
-        } else {
-            Ok(res)
+    match &command[..] {
+        "keygen" => {
+            let kp = session::gen_keypair();
+            output.write(&b"noise255-secret:"[..]).unwrap();
+            output.write(&kp.pubkey.0[..].to_hex().as_bytes()).unwrap();
+            output.write(&kp.privkey.0[..].to_hex().as_bytes()).unwrap();
         }
-    } else {
-        let local = match local {
-            Some(x) => x,
-            None => return println!("Must specify local key when decrypting")
-        };
-        let msg = if &buf[..17] == &b"noise255-message:"[..] {
-            String::from_utf8_lossy(&buf[17..]).from_hex().unwrap()
-        } else {
-            buf
-        };
-        match remote {
-            Some(x) => noisebox::BoxK::unbox(x, local.clone(), &msg[..]),
-            None => Err(())
-        }.or(noisebox::BoxN::unbox(local.clone(), &msg[..]))
-            .or(noisebox::BoxX::unbox(local, &msg[..]))
-    };
-
-    match result {
-        Ok(x) => match output.write_all(&x[..]) {
-            Ok(()) => (),
-            Err(e) => println!("Write failed: {:?}", e)
-        },
-        Err(e) => println!("Decryption failed: {:?}", e)
+        "pubkey" => {
+            let local = match local {
+                Some(x) => x,
+                None => return println!("Key pair must be specified to extract public key")
+            };
+            output.write(&b"noise255-public:"[..]).unwrap();
+            output.write(&local.pubkey.0[..].to_hex().as_bytes()).unwrap();
+        }
+        "box" => {
+            let mut buf = vec![];
+            input.read_to_end(&mut buf).unwrap();
+            let remote = match remote {
+                Some(x) => x,
+                None => return println!("Must specify remote key when encrypting")
+            };
+            enum BoxType {
+                N, K, X
+            }
+            let boxtype = match matches.opt_str("t") {
+                Some(x) => match x.as_ref() {
+                    "n" => BoxType::N,
+                    "k" => BoxType::K,
+                    "x" => BoxType::X,
+                    _ => return println!("Unrecognized box type {}", x),
+                },
+                None => if local.is_some() {
+                    BoxType::X
+                } else {
+                    BoxType::N
+                }
+            };
+            let res = match boxtype {
+                BoxType::N => noisebox::BoxN::enbox(remote, &buf[..]),
+                BoxType::K => noisebox::BoxK::enbox(local.unwrap(), remote, &buf[..]),
+                BoxType::X => noisebox::BoxX::enbox(local.unwrap(), remote, &buf[..])
+            };
+            if matches.opt_present("a") {
+                let mut out = String::new();
+                out.push_str("noise255-message:");
+                out.push_str(&res.to_hex()[..]);
+                output.write_all(out.as_bytes()).unwrap();
+            } else {
+                output.write_all(&res[..]).unwrap();
+            }
+        }
+        "unbox" => {
+            let mut buf = vec![];
+            input.read_to_end(&mut buf).unwrap();
+            let local = match local {
+                Some(x) => x,
+                None => return println!("Must specify local key when decrypting")
+            };
+            let msg = if &buf[..17] == &b"noise255-message:"[..] {
+                String::from_utf8_lossy(&buf[17..]).from_hex().unwrap()
+            } else {
+                buf
+            };
+            let result = match remote {
+                Some(x) => noisebox::BoxK::unbox(x, local.clone(), &msg[..]),
+                None => Err(())
+            }.or(noisebox::BoxN::unbox(local.clone(), &msg[..]))
+                .or(noisebox::BoxX::unbox(local, &msg[..]));
+            match result {
+                Ok(x) => match output.write_all(&x[..]) {
+                    Ok(()) => (),
+                    Err(e) => println!("Write failed: {:?}", e)
+                },
+                Err(e) => println!("Decryption failed: {:?}", e)
+            }
+        }
+        _ => print_usage(&program, opts)
     }
     output.flush().unwrap();
 }

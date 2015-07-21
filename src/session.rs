@@ -1,4 +1,3 @@
-
 use sodiumoxide::crypto::onetimeauth::poly1305;
 use sodiumoxide::crypto::hash::sha512;
 use sodiumoxide::crypto::scalarmult::curve25519;
@@ -223,7 +222,6 @@ impl Session {
                     let k = self.k.clone().unwrap();
                     let n = self.get_nonce();
                     let a = concat_vec!(data[..off], self.h.0);
-                    println!("Static");
                     self.rs = Some(PubKey(make_fixed!(u8, DH_LEN, try!(NoiseBody::read(&data[off..off+DH_LEN+MAC_LEN])
                                                                        .decrypt(&k, &n, &a[..])))));
                     off += DH_LEN + MAC_LEN;
@@ -235,7 +233,6 @@ impl Session {
             }
         }
 
-        println!("Decrypt");
         let k = self.k.clone().unwrap();
         let n = self.get_nonce();
         let a = concat_vec!(data[..off], self.h.0);

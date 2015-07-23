@@ -1,5 +1,5 @@
 use sodiumoxide::crypto::onetimeauth::poly1305;
-use sodiumoxide::crypto::hash::sha512;
+use sodiumoxide::crypto::hash::sha256;
 use sodiumoxide::crypto::scalarmult::curve25519;
 use sodiumoxide::crypto::stream::chacha20;
 use sodiumoxide::crypto::box_::curve25519xsalsa20poly1305;
@@ -38,19 +38,19 @@ pub const SUITE_NAME: [u8; 24] = [0x4E, 0x6F, 0x69, 0x73, 0x65, 0x32, 0x35, 0x35
                                   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                                   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
 
-pub fn hmac_sha512(key: &[u8], message: &[u8]) -> sha512::Digest {
-    let nkey = if key.len() > sha512::HASHBYTES {
-        sha512::hash(key).0
+pub fn hmac_sha256(key: &[u8], message: &[u8]) -> sha256::Digest {
+    let nkey = if key.len() > sha256::HASHBYTES {
+        sha256::hash(key).0
     } else {
-        let mut arr = [0u8; sha512::HASHBYTES];
+        let mut arr = [0u8; sha256::HASHBYTES];
         for i in 0..key.len() { arr[i] = key[i] }
         arr
     };
     let o_pad = nkey.iter().map(|x| x^0x5c).collect::<Vec<u8>>();
     let i_pad = nkey.iter().map(|x| x^0x36).collect::<Vec<u8>>();
 
-    let in1 : sha512::Digest = sha512::hash(&concat_vec!(i_pad, message)[..]);
-    sha512::hash(&concat_vec!(o_pad, in1.0)[..])
+    let in1 : sha256::Digest = sha256::hash(&concat_vec!(i_pad, message)[..]);
+    sha256::hash(&concat_vec!(o_pad, in1.0)[..])
 }
 
 pub fn getkey(key: &chacha20::Key, nonce: &chacha20::Nonce) -> chacha20::Key {
@@ -58,7 +58,7 @@ pub fn getkey(key: &chacha20::Key, nonce: &chacha20::Nonce) -> chacha20::Key {
 }
 
 pub fn kdf(key: &chacha20::Key, nonce: &chacha20::Nonce, input: &[u8]) -> chacha20::Key {
-    chacha20::Key(make_fixed!(u8, 32, hmac_sha512(&getkey(key, nonce).0[..], input).0[..32]))
+    chacha20::Key(make_fixed!(u8, 32, hmac_sha256(&getkey(key, nonce).0[..], input).0[..32]))
 }
 
 pub fn dh(privkey: &[u8; DH_LEN], pubkey: &[u8; DH_LEN]) -> [u8; DH_LEN] {
@@ -88,7 +88,7 @@ pub struct Session {
     re: Option<PubKey>,
     pub k: Option<chacha20::Key>,
     pub n: u64,
-    pub h: sha512::Digest
+    pub h: sha256::Digest
 }
 
 pub enum Descriptor {
@@ -117,7 +117,7 @@ impl Session {
             re: None,
             k: None,
             n: 0,
-            h: sha512::Digest([0u8; 64])
+            h: sha256::Digest([0u8; 32])
         }
     }
 
@@ -195,7 +195,7 @@ impl Session {
             None => buf.extend(payload.iter().cloned())
         }
         if descriptors.len() > 0 {
-            self.h = sha512::hash(&concat_vec!(self.h.0, buf)[..]);
+            self.h = sha256::hash(&concat_vec!(self.h.0, buf)[..]);
         }
 
         buf
@@ -245,7 +245,7 @@ impl Session {
             None => data[off..].to_vec()
         };
         if descriptors.len() > 0 {
-            self.h = sha512::hash(&concat_vec!(self.h.0, data)[..]);
+            self.h = sha256::hash(&concat_vec!(self.h.0, data)[..]);
         }
 
         Ok((prologue, payload))

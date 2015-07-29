@@ -17,9 +17,8 @@ impl Handshake {
     fn descriptor(&self) -> &'static [Descriptor] {
         self.descriptors[self.state]
     }
-    fn next_state(&mut self) -> bool {
+    fn next_state(&mut self) {
         self.state += 1;
-        self.state >= self.descriptors.len()
     }
 
     pub fn send(&mut self) -> Vec<u8> {
@@ -29,10 +28,15 @@ impl Handshake {
         msg
     }
 
-    pub fn recv(&mut self, msg: &[u8]) -> Result<bool,()> {
+    pub fn recv(&mut self, msg: &[u8]) -> Result<(),()> {
         let desc = self.descriptor();
         try!(self.session.consume(msg, desc));
-        Ok(self.next_state())
+        self.next_state();
+        Ok(())
+    }
+
+    pub fn done(&self) -> bool {
+        self.state >= self.descriptors.len()
     }
 
     pub fn finish(mut self) -> (Session, Session) {
@@ -61,6 +65,7 @@ fn test_handshakeNN() {
 
     server.recv(&client.send()[..]).unwrap();
     client.recv(&server.send()[..]).unwrap();
+    assert!(client.done() && server.done());
     let (c1, c2) = client.finish();
     let (s1, s2) = server.finish();
     assert!(c1.k.unwrap().0 == s1.k.unwrap().0);
@@ -90,6 +95,7 @@ fn test_handshakeXX() {
     server.recv(&client.send()[..]).unwrap();
     client.recv(&server.send()[..]).unwrap();
     server.recv(&client.send()[..]).unwrap();
+    assert!(client.done() && server.done());
     let (c1, c2) = client.finish();
     let (s1, s2) = server.finish();
     assert!(c1.k.unwrap().0 == s1.k.unwrap().0);

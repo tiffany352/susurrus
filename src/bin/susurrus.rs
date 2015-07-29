@@ -2,16 +2,17 @@ extern crate susurrus;
 extern crate getopts;
 extern crate sodiumoxide;
 extern crate rustc_serialize;
+extern crate byteorder;
 
-use susurrus::session;
-use susurrus::noisebox;
+use susurrus::{session, noisebox, tcp};
 use getopts::Options;
 use std::env;
 use std::io;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::fs::OpenOptions;
 use rustc_serialize::hex::{FromHex,ToHex};
 use std::string::String;
+use std::net::TcpListener;
 
 macro_rules! make_fixed {
     ($t:ty, $n:expr, $v:expr) => ({
@@ -25,10 +26,12 @@ macro_rules! make_fixed {
 fn print_usage(program: &str, opts: Options) {
     let mut brief = format!("Usage: {} <command> [options]", program);
     brief.push_str("\n\nCommands:\n");
-    brief.push_str("    box     seals data in an encrypted box\n");
-    brief.push_str("    unbox   unseals a box\n");
-    brief.push_str("    keygen  generate a new keypair\n");
-    brief.push_str("    pubkey  exract public key from keypair");
+    brief.push_str("    box         seals data in an encrypted box\n");
+    brief.push_str("    unbox       unseals a box\n");
+    brief.push_str("    keygen      generate a new keypair\n");
+    brief.push_str("    pubkey      exract public key from keypair");
+    brief.push_str("    tcpclient   start a simple TCP noise client");
+    brief.push_str("    tcpserver   start a simple TCP noise server");
     print!("{}", opts.usage(&brief));
 }
 
@@ -71,6 +74,38 @@ fn read_pubkey<F:io::Read>(file: &mut F) -> io::Result<session::PubKey> {
     };
 
     Ok(session::PubKey(make_fixed!(u8, 32, pubkey)))
+}
+
+fn tcpclient(local: Option<session::KeyPair>, remote: Option<session::PubKey>, addr: &str) -> io::Result<()> {
+    let mut con = tcp::NoiseTcpStream::connect(local, remote, addr).unwrap();
+    let mut stdin = io::stdin();
+    loop {
+        let mut line = String::new();
+        try!(stdin.read_line(&mut line));
+        try!(con.send(&[], line.as_bytes()));
+    }
+}
+
+fn tcpserver(local: Option<session::KeyPair>, addr: &str) -> io::Result<()> {
+    let listener = TcpListener::bind(&addr[..]).unwrap();
+    for stream in listener.incoming() {
+        let mut stream = try!(stream.and_then(|stream| tcp::NoiseTcpStream::accept(local.clone(), None, stream)));
+        loop {
+            match stream.recv() {
+                Ok((prologue, payload)) => {
+                    println!("prologue hex: {}", prologue.to_hex());
+                    println!("prologue src: {}", &String::from_utf8_lossy(&prologue[..])[..]);
+                    println!("payload hex: {}", payload.to_hex());
+                    println!("payload src: {}", &String::from_utf8_lossy(&payload[..])[..]);
+                }
+                Err(e) => {
+                    println!("{}", e);
+                    break
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn main() {
@@ -206,6 +241,27 @@ fn main() {
                     Err(e) => println!("Write failed: {:?}", e)
                 },
                 Err(e) => println!("Decryption failed: {:?}", e)
+            }
+        }
+        "tcpclient" => {
+            if matches.free.len() != 1 {
+                println!("Address must be provided as free argument");
+                return
+            }
+            match tcpclient(local, remote, &matches.free[0][..]) {
+                Ok(()) => (),
+                Err(x) => println!("{}", x)
+            }
+        }
+        "tcpserver" => {
+            if matches.free.len() > 1 {
+                println!("Bind address must be provided as free argument");
+                return
+            }
+            let addr = matches.free.get(0).map(|s| s.clone()).unwrap_or("0.0.0.0:8000".to_string());
+            match tcpserver(local, &addr[..]) {
+                Ok(()) => (),
+                Err(x) => println!("{}", x)
             }
         }
         _ => print_usage(&program, opts)

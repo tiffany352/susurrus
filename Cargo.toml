@@ -5,7 +5,7 @@ authors = ["Tiffany Bennett <tiffany@stormbit.net>"]
 description = "Noise implementation in Rust"
 repository = "https://github.com/tiffany352/susurrus"
 keywords = ["noise", "protocol", "crypto"]
-license = "MIT"
+license = "MIT OR Apache-2.0"
 [dependencies]
 byteorder = "*"
 sodiumoxide = { git = "https://github.com/dnaq/sodiumoxide.git" }
